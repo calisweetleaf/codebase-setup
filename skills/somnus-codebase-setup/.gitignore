@@ -1,0 +1,25 @@
+# somnus-codebase-setup
+
+Node modules and caches
+/node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+Local env and secrets
+.env
+.env.local
+*.secret
+
+OS
+.DS_Store
+Thumbs.db
+
+Code editor
+.vscode/
+.idea/
+*.swp
+
+Skill install target inside target repos (generated at install time, not committed here)
+.codex/skills/somnus-codebase-setup/

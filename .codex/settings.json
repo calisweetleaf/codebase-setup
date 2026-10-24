@@ -1,0 +1,24 @@
+{
+  "skill": "somnus-codebase-setup",
+  "skill_version": "1.0.0",
+  "permissions": {
+    "allow": [
+      "Read(*)",
+      "Write(src/**)",
+      "Write(*.md)",
+      "Bash(python:*)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(somnus-codebase-setup:*)"
+    ],
+    "deny": [
+      "Write(manifest.json)",
+      "Bash(rm -rf:*)"
+    ]
+  },
+  "env": {
+    "SOMNUS_SKILL": "somnus-codebase-setup",
+    "SOMNUS_REPO_ROOT": "/home/daeron/Desktop/test/codex"
+  }
+}

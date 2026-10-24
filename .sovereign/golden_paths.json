@@ -1,0 +1,38 @@
+{
+  "ctm_session_bootstrap": {
+    "chain": [
+      "read AGENTS.md",
+      "read STATE.md",
+      "read NOTEPAD.md",
+      "run <GATE_COMMAND>"
+    ],
+    "priors": {
+      "alpha": 7,
+      "beta": 1
+    },
+    "use_cases": [
+      "CTM session start",
+      "skill-guided repo entry"
+    ],
+    "tags": [
+      "ctm",
+      "session",
+      "bootstrap"
+    ]
+  },
+  "somnus_setup": {
+    "chain": [
+      "read AGENTS.md",
+      "instantiate templates",
+      "build phase 5 artifacts",
+      "validate gate"
+    ],
+    "use_cases": [
+      "new Somnus codebase setup"
+    ],
+    "tags": [
+      "somnus",
+      "setup"
+    ]
+  }
+}

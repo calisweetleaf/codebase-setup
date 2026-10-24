@@ -1,0 +1,12 @@
+{
+  "session_id": "somnus-setup-1792815571444",
+  "last_agent": "somnus-codebase-setup",
+  "last_timestamp": "2026-10-24T04:19:31.444Z",
+  "last_action": "Instantiated Somnus template surfaces + built Phase 5 ecosystem artifacts",
+  "open_tasks": [
+    "Define <GATE_COMMAND> in DEVELOPMENT_SETUP.md",
+    "Refresh filetree.md after structural changes"
+  ],
+  "topology_hash": "b7e7d93b003c95d7328089935fb9f09839e7a37f8cdbd6dd017c956897180934",
+  "warm_start_valid": true
+}

@@ -1,0 +1,22 @@
+name: CTM Topology Enforcement
+on: [push, pull_request]
+jobs:
+  placeholder-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if template placeholders remain in live surfaces
+        run: |
+          if grep -rE '%%[^%]+%%|<[A-Z_]+>|\[Project name goes here\]'             AGENTS.md MEMORY.md CONTEXT.md NOTEPAD.md PROVENANCE.md STATE.md ARCHITECTURE.md ARCHITECTURE_MAP.md DEVELOPMENT_SETUP.md 2>/dev/null; then
+            echo "FAIL: template placeholders remain in live surfaces"
+            exit 1
+          fi
+  gate-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify gate command exists
+        run: |
+          if ! grep -q '<GATE_COMMAND>' DEVELOPMENT_SETUP.md 2>/dev/null; then
+            echo "WARN: <GATE_COMMAND> not yet defined in DEVELOPMENT_SETUP.md"
+          fi

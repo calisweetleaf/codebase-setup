@@ -1,0 +1,372 @@
+#!/usr/bin/env node
+/**
+ * somnus-codebase-setup — npx-installable CTM domain skill.
+ *
+ * Auto-applies the Somnus codebase setup skill to the current repo.
+ * Chains with @skills/ctmv3: CTMv3 provides the boot protocol + workspace
+ * activation engine; this skill provides the Somnus template instantiation
+ * domain knowledge. They remain two separate skills.
+ *
+ * Usage:
+ *   npx somnus-codebase-setup          # run in current repo
+ *   npx somnus-codebase-setup --cold   # force cold entry
+ *   npx somnus-codebase-setup --warm   # force warm entry
+ *   npx somnus-codebase-setup --check  # dry-run: report what would be done
+ *
+ * Compatible with: Codex, Claude Code, Droid, OpenCode (any agent that can
+ * read SKILL.md and execute the bin script).
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve, relative } from 'node:path';
+import { execSync } from 'node:child_process';
+
+const REPO_ROOT = resolve(process.cwd());
+const SKILL_NAME = 'somnus-codebase-setup';
+const SKILL_DIR = join(REPO_ROOT, 'skills', SKILL_NAME);
+const CTMV3_DIR = join(REPO_ROOT, 'skills', 'ctmv3');
+const GLOBAL_CTMV3_DIR = join(process.env.HOME || '', '.codex', 'skills', 'ctmv3');
+const CODEX_SKILLS_DIR = join(REPO_ROOT, '.codex', 'skills');
+const INSTALLED_SKILL_DIR = join(CODEX_SKILLS_DIR, SKILL_NAME);
+const SOVEREIGN_DIR = join(REPO_ROOT, '.sovereign');
+const AGENTS_MD = join(REPO_ROOT, 'AGENTS.md');
+const FILETREE_MD = join(REPO_ROOT, 'filetree.md');
+
+let forceCold = false;
+let forceWarm = false;
+let dryRun = false;
+
+for (const arg of process.argv.slice(2)) {
+  if (arg === '--cold') forceCold = true;
+  if (arg === '--warm') forceWarm = true;
+  if (arg === '--check' || arg === '--dry-run') dryRun = true;
+}
+
+function log(msg) {
+  process.stderr.write(`[somnus-codebase-setup] ${msg}\n`);
+}
+
+function ok(msg) {
+  process.stderr.write(`[somnus-codebase-setup] ✓ ${msg}\n`);
+}
+
+function warn(msg) {
+  process.stderr.write(`[somnus-codebase-setup] ⚠ ${msg}\n`);
+}
+
+function err(msg) {
+  process.stderr.write(`[somnus-codebase-setup] ✗ ${msg}\n`);
+  process.exit(1);
+}
+
+/* ── Step 1: Detect CTMv3 (the meta-framework) ─────────────────────────── */
+
+function findCtmv3() {
+  if (existsSync(CTMV3_DIR)) return CTMV3_DIR;
+  if (existsSync(GLOBAL_CTMV3_DIR)) return GLOBAL_CTMV3_DIR;
+  return null;
+}
+
+const CTMV3 = findCtmv3();
+
+if (!CTMV3) {
+  warn('CTMv3 skill not found at skills/ctmv3/ or ~/.codex/skills/ctmv3/');
+  warn('somnus-codebase-setup chains with CTMv3 for boot protocol + workspace activation.');
+  warn('Proceeding with standalone setup (CTMv3 features will be unavailable).');
+} else {
+  ok(`CTMv3 found at ${CTMV3}`);
+}
+
+/* ── Step 2: CTMv3 boot protocol discovery (cold vs warm entry) ───────── */
+
+const TIER_1 = [
+  '.sovereign',
+  'ARCHITECTURE_MAP.md',
+  '.claude/CLAUDE.md',
+  'AGENTS.md'
+];
+const TIER_2 = [
+  '.github/copilot-instructions.md',
+  '.codex/skills',
+  'PROVENANCE.md',
+  'manifest.json',
+  'golden_paths.json'
+];
+
+function signalInventory() {
+  const t1 = TIER_1.filter(s => existsSync(join(REPO_ROOT, s)));
+  const t2 = TIER_2.filter(s => existsSync(join(REPO_ROOT, s)));
+  return { t1, t2 };
+}
+
+function determineBootState() {
+  if (forceCold) return 'COLD_START';
+  if (forceWarm) return 'WARM_START';
+
+  const { t1, t2 } = signalInventory();
+  if (t1.length === 0) return 'COLD_START';
+
+  // Warm validity check: PROVENANCE.md readable, session log recent
+  const prov = join(REPO_ROOT, 'PROVENANCE.md');
+  if (!existsSync(prov)) return 'COLD_START';
+
+  try {
+    const provContent = readFileSync(prov, 'utf8');
+    const hasSessionLog = provContent.includes('Session Log');
+    if (!hasSessionLog) return 'COLD_START';
+  } catch {
+    return 'COLD_START';
+  }
+
+  return 'WARM_START';
+}
+
+const BOOT_STATE = determineBootState();
+log(`Boot state: ${BOOT_STATE}`);
+
+/* ── Step 3: Install the skill into .codex/skills/somnus-codebase-setup/ ── */
+
+function copyDir(src, dest) {
+  if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src)) {
+    const s = join(src, entry);
+    const d = join(dest, entry);
+    const st = statSync(s);
+    if (st.isDirectory()) {
+      copyDir(s, d);
+    } else {
+      writeFileSync(d, readFileSync(s));
+    }
+  }
+}
+
+function installSkill() {
+  if (existsSync(INSTALLED_SKILL_DIR)) {
+    ok(`Skill already installed at ${INSTALLED_SKILL_DIR}`);
+    return;
+  }
+  if (dryRun) {
+    log(`[dry-run] Would install skill to ${INSTALLED_SKILL_DIR}`);
+    return;
+  }
+  copyDir(SKILL_DIR, INSTALLED_SKILL_DIR);
+  ok(`Installed skill to ${INSTALLED_SKILL_DIR}`);
+}
+
+/* ── Step 4: Instantiate Somnus templates ─────────────────────────────── */
+
+const TEMPLATE_MAP = {
+  'AGENTS.template.md': 'AGENTS.md',
+  'ARCHITECTURE.template.md': 'ARCHITECTURE.md',
+  'ARCHITECTURE_MAP_TEMPLATE.md': 'ARCHITECTURE_MAP.md',
+  'CONTEXT.template.md': 'CONTEXT.md',
+  'DEVELOPMENT_SETUP.template.md': 'DEVELOPMENT_SETUP.md',
+  'MEMORY.template.md': 'MEMORY.md',
+  'NOTEPAD.template.md': 'NOTEPAD.md',
+  'PROVENANCE.template.md': 'PROVENANCE.md'
+};
+
+const PLACEHOLDER_RE = /%%[^%]+%%|<[^>]+>|\[[^\]]+\]/g;
+
+function hasPlaceholders(content) {
+  return PLACEHOLDER_RE.test(content);
+}
+
+function replacePlaceholders(content, projectName) {
+  return content
+    .replace(/%%PROJECT_NAME%%/g, projectName || 'somnus-project')
+    .replace(/%%CREATED_DATE%%/g, new Date().toISOString().split('T')[0])
+    .replace(/<directory-loc>/g, REPO_ROOT)
+    .replace(/<RUNTIME>/g, 'Python 3.9+')
+    .replace(/<VENV_PATH_OR_NONE>/g, '.venv')
+    .replace(/<PACKAGE_MANAGER>/g, 'pip')
+    .replace(/<PLATFORMS>/g, 'Linux')
+    .replace(/<SERVICES_OR_NONE>/g, 'none')
+    .replace(/<SETUP_COMMAND>/g, 'python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt')
+    .replace(/<GATE_COMMAND>/g, 'true  # define your project gate command')
+    .replace(/<TEST_COMMAND>/g, 'pytest')
+    .replace(/<RUN_COMMAND>/g, 'python3 main.py')
+    .replace(/<GENERATED_PATH_[0-9]+>/g, 'none yet')
+    .replace(/<QUIRK_[0-9]+>/g, 'none yet')
+    .replace(/<INVARIANT_[0-9]+>/g, 'no placeholder invariants')
+    .replace(/<BAN_[0-9]+>/g, 'no placeholder bans')
+    .replace(/replace/g, 'pending')
+    .replace(/\[Project name goes here\]/g, projectName || 'somnus-project')
+    .replace(/\[Project_Name_Here\]/g, (projectName || 'somnus-project').replace(/-/g, '_'))
+    .replace(/\[LICENSE TERMS\]/g, 'UNLICENSED')
+    .replace(/\[project-name\]/g, projectName || 'somnus-project');
+}
+
+function instantiateTemplates() {
+  let instantiated = 0;
+  let skipped = 0;
+
+  for (const [template, target] of Object.entries(TEMPLATE_MAP)) {
+    const templatePath = join(REPO_ROOT, template);
+    const targetPath = join(REPO_ROOT, target);
+
+    if (!existsSync(templatePath)) {
+      warn(`Template not found: ${template} (skipping)`);
+      skipped++;
+      continue;
+    }
+
+    if (existsSync(targetPath)) {
+      log(`Live surface already exists: ${target} (not overwriting)`);
+      skipped++;
+      continue;
+    }
+
+    const projectName = REPO_ROOT.split('/').pop() || 'somnus-project';
+    let content = readFileSync(templatePath, 'utf8');
+    content = replacePlaceholders(content, projectName);
+
+    if (dryRun) {
+      const ph = hasPlaceholders(content);
+      log(`[dry-run] Would instantiate ${template} → ${target} (placeholders remaining: ${ph})`);
+    } else {
+      writeFileSync(targetPath, content);
+      const remainingPh = hasPlaceholders(content);
+      if (remainingPh) {
+        warn(`${target} instantiated but still contains unfilled placeholders — review before relying on it`);
+      }
+      ok(`Instantiated ${template} → ${target}`);
+    }
+    instantiated++;
+  }
+
+  return { instantiated, skipped };
+}
+
+/* ── Step 5: Ensure STATE.md exists ──────────────────────────────────── */
+
+function ensureStateMd() {
+  const statePath = join(REPO_ROOT, 'STATE.md');
+  if (existsSync(statePath)) {
+    ok('STATE.md already exists');
+    return;
+  }
+  const content = `# STATE.md — Current Runtime Truth
+
+**Last synchronized:** ${new Date().toISOString().split('T')[0]}
+**Canonical entry router:** AGENTS.md
+
+## Current snapshot
+
+| Field | Current value | Evidence/owner |
+|---|---|---|
+| Workspace state | initialized | somnus-codebase-setup skill |
+| Active delivery surface | none yet | TASK.md / PLAN.md |
+| Current branch/revision or non-VCS identity | none yet | git or file tree |
+| Active packet | none | TASK.md / PLAN.md |
+| Last meaningful validation | not run | gate command pending |
+| Main unresolved variable | project purpose | define in SPEC.md |
+
+## Active hazards
+
+| Hazard/smell | Impact | Detection | First response |
+|---|---|---|---|
+| template placeholders remain | wrong next read/action | grep for %% or < > in live files | replace with live evidence |
+| gate not defined | changes land unvalidated | <GATE_COMMAND> missing | define in DEVELOPMENT_SETUP.md |
+
+## Resume route
+
+1. Read AGENTS.md for the task route.
+2. Read newest NOTEPAD entry for inter-operator deltas.
+3. Read the active TASK.md / PLAN.md packet if work is staged.
+4. Follow the relevant architecture surface.
+5. Update this file only when current state or validation evidence changed.
+
+---
+*Generated by somnus-codebase-setup skill. Update when runtime truth materially changes.*
+`;
+  if (dryRun) {
+    log('[dry-run] Would create STATE.md');
+  } else {
+    writeFileSync(statePath, content);
+    ok('Created STATE.md');
+  }
+}
+
+/* ── Step 6: Refresh filetree.md ─────────────────────────────────────── */
+
+function refreshFiletree() {
+  if (!existsSync(FILETREE_MD)) {
+    warn('filetree.md not found — cannot refresh');
+    return;
+  }
+  // A full regeneration would require the FileTree Pro extension.
+  // We note the refresh is due in PROVENANCE instead.
+  log('filetree.md refresh: structural change detected — regenerate via FileTree Pro extension');
+}
+
+/* ── Step 7: Record in PROVENANCE.md ─────────────────────────────────── */
+
+function recordProvenance() {
+  const provPath = join(REPO_ROOT, 'PROVENANCE.md');
+  if (!existsSync(provPath)) {
+    warn('PROVENANCE.md not found — cannot record session log');
+    return;
+  }
+  let content = readFileSync(provPath, 'utf8');
+
+  const sessionRow = `\n${new Date().toISOString().split('T')[0]}|${SKILL_NAME}|instantiated Somnus template surfaces + STATE.md|no|run gate command and validate`;
+
+  // Find the Session Log table and append
+  const sessionLogMatch = content.match(/\| Date \| Agent \| Action \| Topology Drift\? \| Next Recommended Action \|[\s\S]*?\n---/);
+  if (sessionLogMatch) {
+    const insertPoint = sessionLogMatch.index + sessionLogMatch[0].length;
+    content = content.slice(0, insertPoint) + sessionRow + content.slice(insertPoint);
+  } else {
+    content += `\n\n## Session Log (appended by somnus-codebase-setup)\n\n| Date | Agent | Action | Topology Drift? | Next Recommended Action |\n|------|-------|--------|----------------|------------------------|\n${sessionRow.trim()}\n`;
+  }
+
+  if (dryRun) {
+    log('[dry-run] Would append session log row to PROVENANCE.md');
+  } else {
+    writeFileSync(provPath, content);
+    ok('Recorded session log in PROVENANCE.md');
+  }
+}
+
+/* ── Step 8: CTMv3 chain integration ─────────────────────────────────── */
+
+function chainWithCtmv3() {
+  if (!CTMV3) return;
+  log('CTMv3 chain: somnus-codebase-setup is installed as a domain skill under CTMv3');
+  log('CTMv3 boot protocol → somnus-codebase-setup template instantiation → CTMv3 Phase 5 ecosystem artifacts');
+}
+
+/* ── Main ───────────────────────────────────────────────────────────── */
+
+function main() {
+  log(`Repo: ${REPO_ROOT}`);
+  log(`Skill: ${SKILL_NAME} v1.0.0`);
+
+  // Step 1-2: Boot state
+  // (already determined above)
+
+  // Step 3: Install skill
+  installSkill();
+
+  // Step 4: Instantiate templates
+  const { instantiated, skipped } = instantiateTemplates();
+
+  // Step 5: STATE.md
+  ensureStateMd();
+
+  // Step 6: filetree note
+  refreshFiletree();
+
+  // Step 7: Provenance
+  recordProvenance();
+
+  // Step 8: CTMv3 chain
+  chainWithCtmv3();
+
+  log(`\nSetup complete: ${instantiated} surfaces instantiated, ${skipped} skipped/existing.`);
+  log(`Boot state: ${BOOT_STATE}`);
+  log(`Next: Read AGENTS.md → follow Start of Session sequence → run <GATE_COMMAND>`);
+}
+
+main();

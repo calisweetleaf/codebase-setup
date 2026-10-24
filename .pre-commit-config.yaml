@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: somnus-placeholder-check
+        name: CTM Placeholder Gate
+        entry: bash -c 'if grep -rE "%%[^%]+%%|<[A-Z_]+>|\[Project name goes here\]" AGENTS.md MEMORY.md CONTEXT.md NOTEPAD.md PROVENANCE.md STATE.md ARCHITECTURE.md ARCHITECTURE_MAP.md DEVELOPMENT_SETUP.md 2>/dev/null; then echo "FAIL: template placeholders remain"; exit 1; fi'
+        language: system
+        pass_filenames: false
+      - id: somnus-provenance-reminder
+        name: PROVENANCE Session Log Reminder
+        entry: bash -c 'echo "Did you update PROVENANCE.md Session Log?"'
+        language: system
+        always_run: true
+        pass_filenames: false

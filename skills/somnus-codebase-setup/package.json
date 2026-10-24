@@ -1,0 +1,32 @@
+{
+  "name": "somnus-codebase-setup",
+  "version": "1.0.0",
+  "description": "Somnus codebase setup skill — instantiates Somnus template surfaces (AGENTS.md, MEMORY.md, CONTEXT.md, NOTEPAD.md, PROVENANCE.md, STATE.md, ARCHITECTURE.md/SPEC.md, ARCHITECTURE_MAP.md, DEVELOPMENT_SETUP.md, filetree.md) into a live repo. Chains with @skills/ctmv3 for boot-state detection + Phase 5 ecosystem artifacts. No ctm plugin hooks, no bb7 dependency.",
+  "keywords": [
+    "somnus",
+    "ctm",
+    "cognitive-topology-map",
+    "codebase-setup",
+    "agent-ecosystem",
+    "codex",
+    "droid",
+    "opencode"
+  ],
+  "bin": {
+    "somnus-codebase-setup": "./bin/somnus-codebase-setup"
+  },
+  "files": [
+    "SKILL.md",
+    "nodes/",
+    "bin/",
+    "ctmv3-chain.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "local",
+    "url": "file:./skills/somnus-codebase-setup"
+  },
+  "license": "UNLICENSED"
+}
